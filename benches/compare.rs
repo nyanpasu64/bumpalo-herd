@@ -40,12 +40,12 @@ fn boxed_sequence(cnt: usize) {
     }
 }
 
-#[bench]
-fn alloc_directly(b: &mut Bencher) {
-    b.iter(|| {
-        boxed_sequence(CNT);
-    });
-}
+// #[bench]
+// fn alloc_directly(b: &mut Bencher) {
+//     b.iter(|| {
+//         boxed_sequence(CNT);
+//     });
+// }
 
 fn split<F: Fn(usize) + Sync>(f: F) {
     let n = num_cpus::get();
@@ -60,59 +60,59 @@ fn split<F: Fn(usize) + Sync>(f: F) {
     }).unwrap();
 }
 
-#[bench]
-fn alloc_multi(b: &mut Bencher) {
-    b.iter(|| {
-        split(boxed_sequence);
-    });
-}
+// #[bench]
+// fn alloc_multi(b: &mut Bencher) {
+//     b.iter(|| {
+//         split(boxed_sequence);
+//     });
+// }
 
 struct NodeRef<'a> {
     value: usize,
     next: Option<&'a NodeRef<'a>>,
 }
 
-#[bench]
-fn single_threaded(b: &mut Bencher) {
-    let mut arena = Bump::new();
+// #[bench]
+// fn single_threaded(b: &mut Bencher) {
+//     let mut arena = Bump::new();
 
-    b.iter(|| {
-        let mut head: Option<&_> = None;
-        for i in 0..CNT {
-            head = test::black_box(Some(arena.alloc(NodeRef {
-                value: i,
-                next: head,
-            })));
-        }
+//     b.iter(|| {
+//         let mut head: Option<&_> = None;
+//         for i in 0..CNT {
+//             head = test::black_box(Some(arena.alloc(NodeRef {
+//                 value: i,
+//                 next: head,
+//             })));
+//         }
 
-        arena.reset();
-    });
-}
+//         arena.reset();
+//     });
+// }
 
-unsafe fn extend<'a, 'b, T>(v: &'a T) -> &'b T {
-    mem::transmute(v)
-}
+// unsafe fn extend<'a, 'b, T>(v: &'a T) -> &'b T {
+//     mem::transmute(v)
+// }
 
-#[bench]
-fn locked(b: &mut Bencher) {
-    let arena = Mutex::new(Bump::new());
+// #[bench]
+// fn locked(b: &mut Bencher) {
+//     let arena = Mutex::new(Bump::new());
 
-    b.iter(|| {
-        split(|cnt| {
-            let mut head: Option<&_> = None;
-            for i in 0..cnt {
-                unsafe {
-                    head = test::black_box(Some(extend(arena.lock().unwrap().alloc(NodeRef {
-                        value: i,
-                        next: head,
-                    }))));
-                }
-            }
-        });
+//     b.iter(|| {
+//         split(|cnt| {
+//             let mut head: Option<&_> = None;
+//             for i in 0..cnt {
+//                 unsafe {
+//                     head = test::black_box(Some(extend(arena.lock().unwrap().alloc(NodeRef {
+//                         value: i,
+//                         next: head,
+//                     }))));
+//                 }
+//             }
+//         });
 
-        arena.lock().unwrap().reset();
-    });
-}
+//         arena.lock().unwrap().reset();
+//     });
+// }
 
 #[bench]
 fn herd_single(b: &mut Bencher) {
