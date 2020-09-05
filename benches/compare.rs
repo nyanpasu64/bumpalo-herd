@@ -116,7 +116,7 @@ struct NodeRef<'a> {
 
 #[bench]
 fn herd_single(b: &mut Bencher) {
-    let mut arena = Herd::new();
+    let mut arena = Herd::new(1);
 
     b.iter(|| {
         let mut head: Option<&_> = None;
@@ -138,7 +138,7 @@ fn herd_single(b: &mut Bencher) {
 
 #[bench]
 fn herd_multi(b: &mut Bencher) {
-    let mut arena = Herd::new();
+    let mut arena = Herd::new(num_cpus::get());
 
     b.iter(|| {
         split(|cnt| {

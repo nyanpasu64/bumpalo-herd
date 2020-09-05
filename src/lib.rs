@@ -1,50 +1,52 @@
-use std::sync::Mutex;
+use std::sync::{
+    Mutex,
+    MutexGuard,
+};
 
 use bumpalo::Bump;
 
 #[derive(Default)]
-struct HerdInner {
-    extra: Vec<Box<Bump>>,
-}
-
-#[derive(Default)]
-pub struct Herd(Mutex<HerdInner>);
-
-pub struct Member<'h> {
-    arena: Option<Box<Bump>>,
-    owner: &'h Herd,
-}
-
-impl<'h> Member<'h> {
-    pub fn alloc<T>(&self, val: T) -> &'h T {
-        let result = self.arena.as_ref().unwrap().alloc(val) as *const _;
-        unsafe { &*result }
-    }
-}
-
-impl Drop for Member<'_> {
-    fn drop(&mut self) {
-        self.owner.0.lock().unwrap().extra.push(self.arena.take().unwrap());
-    }
+pub struct Herd {
+    allocs: Vec<Mutex<Bump>>,
 }
 
 impl Herd {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(max_instances: usize) -> Herd {
+        let mut allocs = Vec::<Mutex<Bump>>::new();
+        allocs.resize_with(max_instances, || Mutex::new(Default::default()));
+        Herd{allocs}
     }
 
     pub fn reset(&mut self) {
-        for e in &mut self.0.get_mut().unwrap().extra {
-            e.reset();
+        for e in &mut self.allocs {
+            e.get_mut().unwrap().reset();
         }
     }
 
     pub fn get<'h>(&'h self) -> Member<'h> {
-        let mut lock = self.0.lock().unwrap();
-        let bump = lock.extra.pop().unwrap_or_default();
-        Member {
-            arena: Some(bump),
-            owner: self,
+        for alloc in &self.allocs {
+            if let Ok(lock) = alloc.try_lock() {
+                return Member {
+                    arena: lock,
+                };
+            }
         }
+        panic!("all {} allocators locked", self.allocs.len());
+    }
+}
+
+pub struct Member<'h> {
+    /// !Send, unfortunately.
+    arena: MutexGuard<'h, Bump>,
+}
+
+impl<'h> Member<'h> {
+    pub fn alloc<T>(&self, val: T) -> &'h T {
+        // self.arena lasts for 'h.
+        // why can't we return &'h self.arena[]?
+        // because &mut self.arena could invalidate references.
+        // but it's impossible to access &mut self.arena.
+        let result = self.arena.alloc(val) as *const _;
+        unsafe { &*result }
     }
 }
